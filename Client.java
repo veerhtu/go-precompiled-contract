@@ -10,9 +10,12 @@ public class Client {
     }
  
     public static long toLong(byte[] b) {
-        ByteBuffer bb = ByteBuffer.allocate(b.length);
-        bb.put(b);
-        return bb.getLong();
+        ByteBuffer buffer = ByteBuffer.wrap(b);
+        return buffer.getLong();
+    }
+    public static int toInt(byte[] b) {
+        ByteBuffer buffer = ByteBuffer.wrap(b);
+        return buffer.getInt();
     }
 
    static public void main(String argv[]) {
@@ -23,11 +26,10 @@ public class Client {
         Pointer ptr = new Memory(arr.length);
         ptr.write(0, arr, 0, arr.length);
 
-        Pointer rarr = GoInterface.Run(ptr, arr.length);
-        ByteBuffer buffer = ByteBuffer.wrap(rarr.getByteArray(0, 8));
-        long t = buffer.getLong();
         long gas = GoInterface.GetGasForData(ptr, arr.length);
-        System.out.printf("%d\n%d\n", t, gas) ;
-         
+        Pointer rarr = GoInterface.Run(ptr, arr.length);
+        int length = toInt(rarr.getByteArray(3, 7));
+        long time = toLong(rarr.getByteArray(7, length));
+        System.out.printf("%d\n%d\n", gas, time);         
     }
 }

@@ -4,7 +4,6 @@ package main
 import "C"
 import (
 	"encoding/binary"
-	"fmt"
 	"sync"
 	"time"
 	"unsafe"
@@ -43,10 +42,18 @@ func getGasForData([]byte) uint64 {
 // run - Runs the contract, It recieve data as parsed byte and returns back a parsed byte array
 func run(arr []byte) []byte {
 	// Example of returning time in byte array
-	msg := string(arr)
-	fmt.Println(msg, "in go")
 	timeBytes := make([]byte, 8)
 	now := uint64(time.Now().UTC().UnixNano())
 	binary.BigEndian.PutUint64(timeBytes, now)
-	return timeBytes
+	return getBytes(timeBytes, nil)
+}
+
+func getBytes(msg []byte, err error) []byte {
+	msgLenBytes := make([]byte, 4)
+	if err != nil {
+		binary.BigEndian.PutUint32(msgLenBytes, uint32(len(err.Error())))
+		return append(append([]byte{0, 253, 253}, msgLenBytes...), []byte(err.Error())...)
+	}
+	binary.BigEndian.PutUint32(msgLenBytes, uint32(len(msg)))
+	return append(append([]byte{1, 253, 253}, msgLenBytes...), msg...)
 }
