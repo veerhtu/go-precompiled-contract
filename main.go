@@ -19,7 +19,7 @@ func Java_GoJni_getGasForData(ptr unsafe.Pointer, len C.int) uint64 {
 }
 
 //export Java_GoJni_run
-func Java_GoJni_run(ptr unsafe.Pointer, len C.int) unsafe.Pointer {
+func Java_GoJni(ptr unsafe.Pointer, len C.int) unsafe.Pointer {
 	mtx.Lock()
 	defer mtx.Unlock()
 	rarr := run(C.GoBytes(ptr, len))
