@@ -11,15 +11,15 @@ import (
 
 var mtx sync.Mutex
 
-//export GetGasForData
-func GetGasForData(ptr unsafe.Pointer, len C.int) uint64 {
+//export Java_GoJni_getGasForData
+func Java_GoJni_getGasForData(ptr unsafe.Pointer, len C.int) uint64 {
 	mtx.Lock()
 	defer mtx.Unlock()
 	return getGasForData(C.GoBytes(ptr, len))
 }
 
-//export Run
-func Run(ptr unsafe.Pointer, len C.int) unsafe.Pointer {
+//export Java_GoJni_run
+func Java_GoJni_run(ptr unsafe.Pointer, len C.int) unsafe.Pointer {
 	mtx.Lock()
 	defer mtx.Unlock()
 	rarr := run(C.GoBytes(ptr, len))
