@@ -1,7 +1,7 @@
 //SPDX-License-Identifier: GPL-2.0-only OR MIT
 pragma solidity ^0.7.4;
 
-contract Parser {
+contract NewContract {
     
     bytes public buf;
     
