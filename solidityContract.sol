@@ -1,48 +1,52 @@
 //SPDX-License-Identifier: GPL-2.0-only OR MIT
 pragma solidity ^0.7.4;
 
+library IcteLib {
+    function StrtTm(uint8 nt, int64 strtTm, int64 ntrvlTm) public returns (int32) {}
+    function StpTm(int32 rdrId) public {}
+    function DbgLg(string memory l) public {}
+    function FrmtDtTm(int64 tmstmp) public returns (string memory) {}
+    function PrgStrg(string memory k) public {}
+    function StStrg(bytes memory ts, string memory k) public {}
+    function GtI(int32 i, string memory k) public returns (int32) {}
+    function GtL(int32 i, string memory k) public returns (int64) {}
+}
+
 contract NewContract {
+    mapping(int32 => int64) timeOrders;
     
-    bytes public buf;
+    mapping(string => int32) timers;
     
-    constructor(byte _type, byte _subType) {
-        pushByte(_type);
-        pushByte(_subType);
-    }
+    uint constant headerLength = 20;
     
-    function pushByte(byte value) public returns (Parser){
-        buf.push(value);
-        return this;
-    }
-    
-    function pushShort(int16 value) public returns (Parser) {
-        bytes memory valueBytes = abi.encodePacked(value);
-        addBytesToBuf(valueBytes);
-        return this;
-    }
-    
-    function pushInt(int32 value) public returns (Parser) {
-        bytes memory valueBytes = abi.encodePacked(value);
-        addBytesToBuf(valueBytes);
-        return this;
-    }
-    
-    function pushLong(int64 value) public returns (Parser) {
-        bytes memory valueBytes = abi.encodePacked(value);
-        addBytesToBuf(valueBytes);
-        return this;
-    }
-    
-    function pushBytes(bytes memory value) public returns (Parser) {
-        bytes memory valueLengthBytes = abi.encodePacked(uint32(value.length));
-        addBytesToBuf(valueLengthBytes);
-        addBytesToBuf(value);
-        return this;
-    }
-    
-    function addBytesToBuf(bytes memory valueBytes) internal {
-        for(uint i = 0; i < valueBytes.length; i++){
-            pushByte(valueBytes[i]);
+    function onMessage(bytes memory goMsg) external {
+        uint8 msgType = uint8(goMsg[0]);
+        uint8 msgSubType = uint8(goMsg[1]);
+
+        if(msgType == uint8(0x00)){
+            if (msgSubType == uint8(0xd0)) { // MsgSubtypeTimestamp
+                string memory tmpKey = "tmp";
+                IcteLib.StStrg(goMsg, tmpKey);
+                int32 rdrId = IcteLib.GtI(2, tmpKey);
+                int64 tstmp = IcteLib.GtL(6, tmpKey);
+                IcteLib.PrgStrg(tmpKey);
+                timeOrders[rdrId] = tstmp;
+                IcteLib.DbgLg(string(abi.encodePacked("Timer hit with timestamp = ", IcteLib.FrmtDtTm(tstmp))));
+            }
         }
     }
+    
+    function addTimer(string calldata timerName, uint8 nt, int64 strtTm, int64 ntrvlTm) external {
+        int32 orderId = IcteLib.StrtTm(nt, strtTm, ntrvlTm);
+        timers[timerName] = orderId;
+    }
+    
+    
+    function rmTimer(string calldata timerName) external {
+        int32 rdrId = timers[timerName];
+        IcteLib.StpTm(rdrId);
+        delete timers[timerName];
+        delete timeOrders[rdrId];
+    }
+    
 }
