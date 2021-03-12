@@ -33,10 +33,9 @@ contract NewContract {
         BlackList,
         Developer,
         Admin,
+        Coowner,
         Owner
     }
-
-    //mapping(int32 => mapping(address => Access)) private AccessPolicy;
 
     SkillStruct[] private SkillList;
     mapping(bytes26 => int32) private registeredNames;
@@ -53,13 +52,30 @@ contract NewContract {
         return getBalance(skillId, msg.sender);
     }
     
-    function setBalance(address user, int32 skillId, uint256 bal)
+    function mint(int32 skillId, uint256 qty)
     public
+    canModify(skillId, Access.Coowner, false)
     {
         Skill skill = getSkill(skillId);
-        skill.setBalance(user, bal);
+        skill.mint(qty);
+    }
+    
+    function transferTo(int32 skillId, uint256 qty, address to)
+    public
+    canModify(skillId, Access.Admin, false)
+    {
+        Skill skill = getSkill(skillId);
+        skill.transferTo(qty, to);
     }
 
+    function transferFrom(int32 skillId, uint256 qty, address from)
+    public
+    canModify(skillId, Access.Admin, false)
+    {
+        Skill skill = getSkill(skillId);
+        skill.transferFrom(qty, from);
+    }
+    
     /********************************************************************
     *   LIST SKILL OPERATIONS
     ********************************************************************/
@@ -124,6 +140,7 @@ contract NewContract {
 
     function registerNewSkill(bytes26 skillName)
     external
+    returns (int32)
     {
         IcteLib.DbgLg(string(abi.encodePacked("registering skill: ", skillName)));
         if(registeredNames[skillName] != 0){
@@ -146,10 +163,12 @@ contract NewContract {
 
         SkillList.push(tStruct);
         registeredNames[skillName] = tStruct.id + 1;
+        return tStruct.id;
     }
 
     function setStage(int32 skillId, Stage _stage)
     public
+    canModify(skillId, Access.Admin, false)
     {
         SkillStruct memory tStruct = SkillList[uint(skillId)];
         require(_stage != tStruct.stage);
@@ -160,6 +179,7 @@ contract NewContract {
 
     function setState(int32 skillId, State _state)
     public
+    canModify(skillId, Access.Admin, false)
     {
         SkillStruct memory tStruct = SkillList[uint(skillId)];
         tStruct.state = _state;
@@ -168,6 +188,7 @@ contract NewContract {
 
     function setTokenName(int32 skillId, bytes26 _skillName)
     public
+    canModify(skillId, Access.Owner, false)
     {
         SkillStruct memory tStruct = SkillList[uint(skillId)];
         require(registeredNames[_skillName] == 0);
@@ -177,6 +198,37 @@ contract NewContract {
         registeredNames[_skillName] = tStruct.id + 1;
 
         SkillList[uint(skillId)] = tStruct;
+    }
+    
+    function AddBlackList(int32 skillId, address account) public canModify(skillId, Access.Admin, false) {
+        SkillList[uint(skillId)].skill.AddDeveloper(account);
+    }
+    function AddWhiteList(int32 skillId, address account) public canModify(skillId, Access.Admin, false) {
+        SkillList[uint(skillId)].skill.AddWhiteList(account);
+    }
+    function AddDeveloper(int32 skillId, address account) public canModify(skillId, Access.Admin, false) {
+        SkillList[uint(skillId)].skill.AddDeveloper(account);
+    }
+    function AddAdmin(int32 skillId, address account) public canModify(skillId, Access.Admin, false) {
+        SkillList[uint(skillId)].skill.AddAdmin(account);
+    }
+    function AddOwner(int32 skillId, address account) public canModify(skillId, Access.Owner, false) {
+        SkillList[uint(skillId)].skill.AddOwner(account);
+    }
+    function RemoveBlackList(int32 skillId, address account) public canModify(skillId, Access.Admin, false) {
+        SkillList[uint(skillId)].skill.RemoveDeveloper(account);
+    }
+    function RemoveWhiteList(int32 skillId, address account) public canModify(skillId, Access.Admin, false) {
+        SkillList[uint(skillId)].skill.RemoveWhiteList(account);
+    }
+    function RemoveDeveloper(int32 skillId, address account) public canModify(skillId, Access.Admin, false) {
+        SkillList[uint(skillId)].skill.RemoveDeveloper(account);
+    }
+    function RemoveAdmin(int32 skillId, address account) public canModify(skillId, Access.Owner, false) {
+        SkillList[uint(skillId)].skill.RemoveAdmin(account);
+    }
+    function RemoveOwner(int32 skillId) public canModify(skillId, Access.Owner, false) {
+        SkillList[uint(skillId)].skill.RemoveOwner();
     }
 
     /********************************************************************
@@ -231,11 +283,72 @@ contract NewContract {
             result := mload(add(source, 32))
         }
     }
+    
+    function canModifyBool(int32 skillId, Access level, bool requiresNonProd) internal view returns (bool) {
+        SkillStruct memory tStruct = SkillList[uint(skillId)];
+        if(requiresNonProd && Stage.Prod == tStruct.stage) {
+            return false;
+        }
+        Access accessLevel = SkillList[uint(skillId)].skill.GetAccess(msg.sender);
+        if(accessLevel == Access.BlackList){
+            return false;
+        }
+        return(Access(accessLevel) >= level);
+    }
+
+    modifier canModify(int32 skillId, Access level, bool requiresNonProd) {
+        SkillStruct memory tStruct = SkillList[uint(skillId)];
+        require(!(requiresNonProd && Stage.Prod == tStruct.stage));
+        Access accessLevel = SkillList[uint(skillId)].skill.GetAccess(msg.sender);
+        require(accessLevel != Access.BlackList);
+        require(accessLevel >= level);
+        _;
+    }
 }
 
 contract Skill {
+    mapping(address => NewContract.Access) private AccessPolicy;
 
     mapping(address => uint256) private balances;
+    
+    constructor() {
+        AccessPolicy[msg.sender] = NewContract.Access.Owner;
+    }
+    
+    function AddBlackList(address account) public canModify(NewContract.Access.Admin) {
+        AccessPolicy[account] = NewContract.Access.BlackList;
+    }
+    function AddWhiteList(address account) public canModify(NewContract.Access.Admin) {
+        AccessPolicy[account] = NewContract.Access.WhiteList;
+    }
+    function AddDeveloper(address account) public canModify(NewContract.Access.Admin) {
+        AccessPolicy[account] = NewContract.Access.Developer;
+    }
+    function AddAdmin(address account) public canModify(NewContract.Access.Admin) {
+        AccessPolicy[account] = NewContract.Access.Admin;
+    }
+    function AddOwner(address account) public canModify(NewContract.Access.Owner) {
+        AccessPolicy[account] = NewContract.Access.Owner;
+    }
+    function RemoveBlackList(address account) public canModify(NewContract.Access.Admin) {
+        delete AccessPolicy[account];
+    }
+    function RemoveWhiteList(address account) public canModify(NewContract.Access.Admin) {
+        delete AccessPolicy[account];
+    }
+    function RemoveDeveloper(address account) public canModify(NewContract.Access.Admin) {
+        delete AccessPolicy[account];
+    }
+    function RemoveAdmin(address account) public canModify(NewContract.Access.Owner) {
+        delete AccessPolicy[account];
+    }
+    function RemoveOwner() public canModify(NewContract.Access.Owner) {
+        delete AccessPolicy[msg.sender];
+    }
+    
+    function GetAccess(address account) public view returns (NewContract.Access) {
+        return AccessPolicy[account];
+    }
 
     /**
      * @dev Transfer balance from caller address to receiver address
@@ -245,6 +358,22 @@ contract Skill {
     function setBalance(address receiver, uint256 amount) public {
         balances[receiver] += amount;
     }
+    
+    function mint(uint256 qty) external canModify(NewContract.Access.Coowner) {
+        balances[msg.sender] += qty;
+    }
+    
+    function transferTo(uint256 qty, address to) external canModify(NewContract.Access.Admin) {
+        require(balances[msg.sender] > qty);
+        balances[msg.sender] -= qty;
+        balances[to] += qty;
+    }
+    
+    function transferFrom(uint256 qty, address from) external canModify(NewContract.Access.Admin) {
+        require(balances[from] > qty);
+        balances[from] -= qty;
+        balances[msg.sender] += qty;
+    }
 
     /**
      * @dev Get balance for a specific account
@@ -252,5 +381,12 @@ contract Skill {
     */
     function balance(address _account) public view returns (uint256) {
         return balances[_account];
+    }
+    
+    modifier canModify(NewContract.Access level) {
+        NewContract.Access accessLevel = AccessPolicy[msg.sender];
+        require(accessLevel != NewContract.Access.BlackList);
+        require(accessLevel >= level);
+        _;
     }
 }
